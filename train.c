@@ -7,8 +7,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <sys/select.h>
-
 int extract_message(char **buf, char **msg) {
   char *newbuf;
   int i;
@@ -52,99 +50,97 @@ char *str_join(char *buf, char *add) {
   return (newbuf);
 }
 
-typedef struct s_client {
+#include <sys/select.h>
+
+typedef s_client {
 	int	id;
-	char*	buf;
+	char*	buf;	
 } t_client;
 
-t_client g_clients[FD_SETSIZE];
+t_client	g_clients[FD_SETSIZE];
 
 fd_set	g_active_fds;
 
 int	g_max_fd;
-int	g_server_fd;
 int	g_next_id;
+int	g_server_fd;
 
-void fatal_error(void) {
+void	fatal_error(void) {
 	write(2, "Fatal error\n", 12);
 	exit(1);
 }
 
-void	broadcast(int sender_fd, fd_set write_fds, char* message) {
-	int	fd=0;
+void	broadcast(int client_fd, fd_set write_fds, char* message) {
+	int	fd = 0;
 
 	while (fd <= g_max_fd) {
-		if (fd != g_server_fd && fd != sender_fd && FD_ISSET(fd, &write_fds)) {
-			if (send(fd, message, strlen(message), 0) < 1)
-				fatal_error();
-		}
+		if(fd != g_server_fd && fd != client_fd && !FD_ISSET(fd, &write_fds))
+			send(fd, message, strlen(message), 0);
 		fd++;
 	}
 }
 
 void	accept_client(int client_fd, fd_set write_fds) {
-	char	message[64];
-
-	if (g_max_fd < client_fd)
-		g_max_fd = client_fd;
+	char message[64]
 
 	FD_SET(client_fd, &g_active_fds);
 	g_clients[client_fd].id = g_next_id++;
 	g_clients[client_fd].buf = NULL;
 
+	if (g_max_fd < client_fd)
+		g_max_fd = client_fd;
+	
 	sprintf(message, "server: client %d just arrived\n", g_clients[client_fd].id);
-	broadcast(client_fd, write_fds, message);	
+	broadcast(client_fd, write_fds, message);
 }
 
 void	delete_client(int client_fd, fd_set write_fds) {
 	char message[64];
 
-	sprintf(message, "server: client %d just left\n", g_clients[client_fd].id);
-	broadcast(client_fd, write_fds, message);
+        sprintf(message, server: client %d just left\n, g_clients[client_fd].id);
+ 	broadcast(client_fd, write_fds, message);
 
-	close(client_fd);
+	FD_CLR(client_fd, &g_active_fds);
 	free(g_clients[client_fd].buf);
 	g_clients[client_fd].buf = NULL;
-	FD_CLR(client_fd, &g_active_fds);
 
-	while (g_max_fd > g_server_fd && !FD_ISSET(g_max_fd, &g_active_fds))
-	       g_max_fd--;	
+	while (g_max_fd > g_serer_fd && !FD_ISSET(g_max_fd, &g_active_fds)
+			g_max_fd--;
+
 }
 
-
 void	send_message(int client_fd, fd_set write_fds) {
-	char	*message;
+	char*	message;
 	char	prefix[64];
-	int	extract_res;
+	int	extract_size;
 
-	extract_res = extract_message(&g_clients[client_fd].buf, &message);
-	while(extract_res == 1) {
+	extract_size = extract_message(&g_clients[client_fd], &message)
+	while (extract_size > 0) {
 		sprintf(prefix, "client %d: ", g_clients[client_fd].id);
 		broadcast(client_fd, write_fds, prefix);
 		broadcast(client_fd, write_fds, message);
 		free(message);
-		extract_res = extract_message(&g_clients[client_fd].buf, &message);
+		extract_size = extract_message(&g_clients[client_fd], &message);
 	}
-	if (extract_res < 0)
+	if (extract_size < 0)
 		fatal_error();
-
 }
 
-int main(int argc, char** argv) {
 
-  char buffer[1001];
- 
-  struct sockaddr_in	servaddr;
+int main(int argc, char** argv) {
+  struct sockaddr_in	serveaddr;
+
+  char buffer[1000]
 
   fd_set	write_fds;
   fd_set	read_fds;
 
   int	client_fd;
+  int	bytes_read;
   int	fd;
-  int	byte_read;
 
   if (argc != 2) {
-  	write(2, "Wrong number of arguments\n", 26);
+  	write(2, "Wrong number of arguments \n", 26);
 	exit(1);
   }
 
@@ -157,51 +153,39 @@ int main(int argc, char** argv) {
   // assign IP, PORT
   servaddr.sin_family = AF_INET;
   servaddr.sin_addr.s_addr = htonl(2130706433); // 127.0.0.1
-  servaddr.sin_port = htons(atoi(argv[1]));
+  servaddr.sin_port = htons(atoi(argv[1]);
 
   // Binding newly created socket to given IP and verification
-  if ((bind(g_server_fd, (const struct sockaddr *)&servaddr, sizeof(servaddr))) !=
-      0) {
-    fatal_error();
+  if ((bind(g_server_fd, (const struct sockaddr *)&servaddr, sizeof(servaddr))) != 0)
+  	fatal_error();
+  if (listen(sockfd, 10) != 0)
+  	fatal_error();
+
+  select(g_max_fd + 1, &read_fds, &rite_fds, NULL, NULL);
+
+  if (FD_ISSET(g_server_fd, &read_fds)) {
+  	client_fd  = accept(g_server_fd, NULL, NULL);
+  	if (client_fd < 0 || client_fd >= FD_SETSIZE)
+    		fatal_error();
+	accept_client(clietn_fd, write_fds);
   }
-  if (listen(g_server_fd, 10) != 0) {
-    fatal_error();
-  }
 
-  g_next_id = 0;
-  g_max_fd = g_server_fd;
-  FD_ZERO(&g_active_fds);
-  FD_SET(g_server_fd, &g_active_fds);
-
-  while(1) {
-  	write_fds = g_active_fds;
-	read_fds = g_active_fds;
-
-	if (select(g_max_fd + 1, &read_fds, &write_fds, NULL, NULL) < 0)
-		fatal_error();
-	
-	if (FD_ISSET(g_server_fd, &read_fds)) {
-		client_fd = accept(g_server_fd, NULL, NULL);
-	        if (client_fd < 0 || client_fd >= FD_SETSIZE)
-        	        fatal_error();
-		accept_client(client_fd, write_fds);
-	}
-	fd = 0;
-	while (fd <= g_max_fd) {
-		if (fd != g_server_fd && FD_ISSET(fd, &read_fds)) {
-			byte_read = recv(fd, buffer, 1000, 0);
-			if (byte_read < 0)
-				fatal_error();
-			if (byte_read == 0)
-				delete_client(fd, write_fds);
-			else {
-				buffer[byte_read] = '\0';
-				g_clients[fd].buf = str_join(g_clients[fd].buf, buffer);
-				send_message(fd, write_fds);
-			}
+  fd = 0;
+  while (fd <= g_max_fd) {
+  	if( fd != g_server_fd && FD_ISSET(fd, &read_fds)) {
+		bytes_read = recv(fd, buffer, 1000, 0);
+		if (bytes_read < 0)
+			fatal_error();
+		if (bytes_read = 0)
+			delete_client(fd, write_fds);
+		else {
+			buffer[bytes_read] = '\0';
+			string_join(g_clients[fd].buf, buffer);
+			if (g_clients[fd].buf = NULL)
+		       		fatal_error();
+			send_message(fd, write_fds);		
 		}
-		fd++;
 	}
-	
+	fd++;
   }
 }

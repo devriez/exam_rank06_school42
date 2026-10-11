@@ -92,22 +92,22 @@ void	accept_client(int client_fd, fd_set write_fds) {
 	g_clients[client_fd].id = g_next_id++;
 	g_clients[client_fd].buf = NULL;
 
-	message = sprintf(message, "server: client %d just arrived\n", g_clients[client_fd].id);
+	sprintf(message, "server: client %d just arrived\n", g_clients[client_fd].id);
 	broadcast(client_fd, write_fds, message);	
 }
 
 void	delete_client(int client_fd, fd_set write_fds) {
 	char message[64];
 
-	message = sprintf(message, "server: client %d just left\n", g_clients[client_fd].id);
+	sprintf(message, "server: client %d just left\n", g_clients[client_fd].id);
 	broadcast(client_fd, write_fds, message);
 
 	close(client_fd);
 	free(g_clients[client_fd].buf);
 	g_clients[client_fd].buf = NULL;
-	FD_CLR(client_fd, &g_clients);
+	FD_CLR(client_fd, &g_active_fds);
 
-	while (g_max_fd > g_server_fd && !FD_ISSET(g_max_fd, &g_clients))
+	while (g_max_fd > g_server_fd && !FD_ISSET(g_max_fd, &g_active_fds))
 	       g_max_fd--;	
 }
 
@@ -118,8 +118,8 @@ void	send_message(int client_fd, fd_set write_fds) {
 	int	extract_res;
 
 	extract_res = extract_message(&g_clients[client_fd].buf, &message);
-	while(extract_res = 1) {
-		prefix = sprintf(prefix, "client %d: ", g_clients[client_fd].id);
+	while(extract_res == 1) {
+		sprintf(prefix, "client %d: ", g_clients[client_fd].id);
 		broadcast(client_fd, write_fds, prefix);
 		broadcast(client_fd, write_fds, message);
 		free(message);
@@ -164,8 +164,8 @@ int main(int argc, char** argv) {
       0) {
     fatal_error();
   }
-  if (listen(sockfd, 10) != 0) {
-    fatal_error()
+  if (listen(g_server_fd, 10) != 0) {
+    fatal_error();
   }
 
   g_next_id = 0;
@@ -177,25 +177,25 @@ int main(int argc, char** argv) {
   	write_fds = g_active_fds;
 	read_fds = g_active_fds;
 
-	if (select(g_max_fd + 1, &read_fd, &write_fd, NULL, NULL) < 0)
+	if (select(g_max_fd + 1, &read_fds, &write_fds, NULL, NULL) < 0)
 		fatal_error();
 	
-	if (FS_ISSET(g_server_fd, &read_fds)) {
+	if (FD_ISSET(g_server_fd, &read_fds)) {
 		client_fd = accept(client_fd, NULL, NULL);
 	        if (client_fd < 0 || client_fd > FD_SETSIZE)
         	        fatal_error();
 		accept_client(client_fd, write_fds);
 	}
 	fd = 0;
-	while (fd <= fd_max_fd) {
+	while (fd <= g_max_fd) {
 		if (fd != g_server_fd && FD_ISSET(fd, &read_fds)) {
-			bytes_read = recv(fd, buffer, 1000, 0);
-			if (bytes_read < 0)
+			byte_read = recv(fd, buffer, 1000, 0);
+			if (byte_read < 0)
 				fatal_error();
-			if (bytes_read = 0)
+			if (byte_read == 0)
 				delete_client(fd, write_fds);
 			else {
-				buffer[bytes_read] = '\0';
+				buffer[byte_read] = '\0';
 				g_clients[fd].buf = str_join(g_clients[fd].buf, buffer);
 				send_message(fd, write_fds);
 			}

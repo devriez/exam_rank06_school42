@@ -88,7 +88,8 @@ void	broadcast(int sender_fd, fd_set write_fds, char *message)
 	while (fd <= g_max_fd)
 	{
 		if (fd != sender_fd && fd != g_server_fd && FD_ISSET(fd, &write_fds))
-			send(fd, message, strlen(message), 0);
+			if (send(fd, message, strlen(message), 0) < 0)
+				fatal_error();
 		fd++;
 	}
 }
@@ -100,8 +101,10 @@ void	register_client(int client_fd, fd_set write_fds)
 	g_clients[client_fd].id = g_next_id++;
 	g_clients[client_fd].buf = NULL;
 	FD_SET(client_fd, &g_active_fds);
+
 	if (client_fd > g_max_fd)
 		g_max_fd = client_fd;
+
 	sprintf(message, "server: client %d just arrived\n", g_clients[client_fd].id);
 	broadcast(client_fd, write_fds, message);
 }
@@ -112,10 +115,12 @@ void	remove_client(int client_fd, fd_set write_fds)
 
 	sprintf(message, "server: client %d just left\n", g_clients[client_fd].id);
 	broadcast(client_fd, write_fds, message);
+
 	FD_CLR(client_fd, &g_active_fds);
 	close(client_fd);
 	free(g_clients[client_fd].buf);
 	g_clients[client_fd].buf = NULL;
+	
 	while (g_max_fd > g_server_fd && !FD_ISSET(g_max_fd, &g_active_fds))
 		g_max_fd--;
 }
@@ -154,15 +159,16 @@ int	main(int argc, char **argv)
 	**
 	** ADD these variables for the select-based many-client server:
 	*/
+	char				buffer[1001];
+
 	struct sockaddr_in	server_address;
-	struct sockaddr_in	client_address;
+
 	fd_set				read_fds;
 	fd_set				write_fds;
-	socklen_t			client_length;
+
 	int					client_fd;
 	int					fd;
 	int					bytes_read;
-	char				buffer[1001];
 
 	/* ADD: required by subject.txt; main.c did not check its arguments. */
 	if (argc != 2)
@@ -170,9 +176,6 @@ int	main(int argc, char **argv)
 		write(2, "Wrong number of arguments\n", 26);
 		return (1);
 	}
-
-	/* ADD: initialize the permanent set before adding g_server_fd to it. */
-	FD_ZERO(&g_active_fds);
 
 	/* FROM main.c: socket creation, with its debug output removed. */
 	g_server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -183,10 +186,9 @@ int	main(int argc, char **argv)
 
 	/*
 	** FROM main.c: clearing and filling the IPv4 server address.
-	** DELETE: bzero(&servaddr, sizeof(servaddr));
-	** ADD: memset(&server_address, 0, sizeof(server_address));
 	*/
-	memset(&server_address, 0, sizeof(server_address));
+	bzero(&server_address, sizeof(server_address));
+
 	server_address.sin_family = AF_INET;
 	server_address.sin_addr.s_addr = htonl(2130706433);
 	/* DELETE: servaddr.sin_port = htons(8081); */
@@ -194,8 +196,7 @@ int	main(int argc, char **argv)
 	server_address.sin_port = htons(atoi(argv[1]));
 
 	/* FROM main.c: bind and listen, with starter debug output removed. */
-	if (bind(g_server_fd, (struct sockaddr *)&server_address,
-			sizeof(server_address)) < 0)
+	if (bind(g_server_fd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
 		fatal_error();
 	/* DELETE: printf("socket bind failed...\\n"); */
 	/* DELETE: printf("Socket successfully binded..\\n"); */
@@ -212,20 +213,22 @@ int	main(int argc, char **argv)
 	** ADD this full loop instead: select waits for new clients, messages, and
 	** disconnects without blocking a lazy client.
 	*/
+	FD_ZERO(&g_active_fds);
 	FD_SET(g_server_fd, &g_active_fds);
 	g_max_fd = g_server_fd;
+
 	while (1)
 	{
 		read_fds = g_active_fds;
 		write_fds = g_active_fds;
+
 		if (select(g_max_fd + 1, &read_fds, &write_fds, NULL, NULL) < 0)
 			fatal_error();
-		client_length = sizeof(client_address);
+
 		if (FD_ISSET(g_server_fd, &read_fds))
 		{
-			client_fd = accept(g_server_fd, (struct sockaddr *)&client_address,
-					&client_length);
-			if (client_fd < 0 || client_fd >= FD_SETSIZE)
+			client_fd = accept(g_server_fd, NULL, NULL);
+			if (client_fd < 0 || client_fd > FD_SETSIZE)
 				fatal_error();
 			register_client(client_fd, write_fds);
 		}

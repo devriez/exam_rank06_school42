@@ -66,7 +66,7 @@ int	g_server_fd;
 int	g_next_id;
 
 void fatal_error(void) {
-	write(2, "Fatal error'\n'", 12);
+	write(2, "Fatal error\n", 12);
 	exit(1);
 }
 
@@ -75,7 +75,7 @@ void	broadcast(int sender_fd, fd_set write_fds, char* message) {
 
 	while (fd <= g_max_fd) {
 		if (fd != g_server_fd && fd != sender_fd && FD_ISSET(fd, &write_fds)) {
-			if (send(fd, message, sizeof(message), 0) < 1)
+			if (send(fd, message, strlen(message), 0) < 1)
 				fatal_error();
 		}
 		fd++;
@@ -132,7 +132,7 @@ void	send_message(int client_fd, fd_set write_fds) {
 
 int main(int argc, char** argv) {
 
-  char buffer[1000];
+  char buffer[1001];
  
   struct sockaddr_in	servaddr;
 
@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
   int	byte_read;
 
   if (argc != 2) {
-  	write(2, "Wrong number of arguments'\n'", 26);
+  	write(2, "Wrong number of arguments\n", 26);
 	exit(1);
   }
 
@@ -181,8 +181,8 @@ int main(int argc, char** argv) {
 		fatal_error();
 	
 	if (FD_ISSET(g_server_fd, &read_fds)) {
-		client_fd = accept(client_fd, NULL, NULL);
-	        if (client_fd < 0 || client_fd > FD_SETSIZE)
+		client_fd = accept(g_server_fd, NULL, NULL);
+	        if (client_fd < 0 || client_fd >= FD_SETSIZE)
         	        fatal_error();
 		accept_client(client_fd, write_fds);
 	}

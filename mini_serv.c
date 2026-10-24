@@ -113,13 +113,13 @@ void	remove_client(int client_fd, fd_set write_fds)
 {
 	char	message[64];
 
-	sprintf(message, "server: client %d just left\n", g_clients[client_fd].id);
-	broadcast(client_fd, write_fds, message);
-
 	FD_CLR(client_fd, &g_active_fds);
 	close(client_fd);
 	free(g_clients[client_fd].buf);
 	g_clients[client_fd].buf = NULL;
+
+	sprintf(message, "server: client %d just left\n", g_clients[client_fd].id);
+	broadcast(client_fd, write_fds, message);
 	
 	while (g_max_fd > g_server_fd && !FD_ISSET(g_max_fd, &g_active_fds))
 		g_max_fd--;
